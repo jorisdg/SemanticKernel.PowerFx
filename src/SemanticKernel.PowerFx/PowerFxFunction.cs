@@ -1,14 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Threading.Tasks;
-using System.Threading;
-using Microsoft.SemanticKernel.SkillDefinition;
-using Microsoft.SemanticKernel.AI.TextCompletion;
-using Microsoft.SemanticKernel.Orchestration;
-using Microsoft.PowerFx;
-using Microsoft.PowerFx.Types;
 using System.Linq;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.PowerFx;
+using Microsoft.PowerFx.Types;
+using Microsoft.SemanticKernel;
+using Microsoft.SemanticKernel.AI;
+using Microsoft.SemanticKernel.AI.TextCompletion;
+using Microsoft.SemanticKernel.Orchestration;
 
 namespace SemanticKernel.PowerFx
 {
@@ -24,17 +25,16 @@ namespace SemanticKernel.PowerFx
 
         public string Name { get; protected set; }
 
-        public string SkillName { get; protected set; }
+        public string PluginName { get; protected set; }
 
         public string Description { get; protected set; }
 
+        #region Obsolete
+        public AIRequestSettings RequestSettings { get; protected set; } = new AIRequestSettings();
         public bool IsSemantic => false;
 
-        public CompleteRequestSettings RequestSettings { get; protected set; } = new CompleteRequestSettings();
-
-        private ITextCompletion _aiService = null;
-
-        private IReadOnlySkillCollection _skillCollection = null;
+        public string SkillName => PluginName;
+        #endregion
 
         public PowerFxFunction(RecalcEngine engine, string expression, bool hasSideEffects, string name, string skillName, string description, List<ParameterView> parameters)
         {
@@ -42,31 +42,28 @@ namespace SemanticKernel.PowerFx
             Expression = expression;
             HasSideEffects = hasSideEffects;
             Name = name;
-            SkillName = skillName;
+            PluginName = skillName;
             Description = description;
             Parameters = (parameters == null || parameters.Count <= 0) ? DefaultParameterList() : parameters;
         }
 
         public FunctionView Describe()
         {
-            return new FunctionView
+            var view = new FunctionView(Name, PluginName, Description)
             {
-                IsSemantic = this.IsSemantic,
-                Name = this.Name,
-                SkillName = this.SkillName,
-                Description = this.Description,
-                Parameters = this.Parameters,
+                Parameters = this.Parameters
             };
+
+            return view;
         }
 
-        public async Task<SKContext> InvokeAsync(SKContext context, CompleteRequestSettings settings = null, CancellationToken cancellationToken = default)
+        public async Task<FunctionResult> InvokeAsync(SKContext context, AIRequestSettings requestSettings = null, CancellationToken cancellationToken = default)
         {
-            var result = new SKContext();
+            var newContext = context.Clone();
+            var result = new FunctionResult(Name, PluginName, newContext);
 
             if (context != null)
             {
-                result = context.Clone();
-
                 var exprVariables = new List<NamedValue>();
                 var contextVarEnumerator = context.Variables.GetEnumerator();
                 while(contextVarEnumerator.MoveNext())
@@ -78,36 +75,41 @@ namespace SemanticKernel.PowerFx
 
                 var exprResult = await engine.EvalAsync(Expression, cancellationToken, exprContext, new ParserOptions() { AllowsSideEffects = HasSideEffects });
 
-                result.Variables.Set("INPUT", PrintResult(exprResult));
+                newContext.Variables.Set("INPUT", PrintResult(exprResult));
             }
 
             return result;
         }
 
-        public ISKFunction SetAIConfiguration(CompleteRequestSettings settings)
+        #region obsolete
+        public ISKFunction SetAIConfiguration(AIRequestSettings settings)
         {
-            RequestSettings = settings;
-
+            // obsolete function
             return this;
         }
 
         public ISKFunction SetAIService(Func<ITextCompletion> serviceFactory)
         {
-            this._aiService = serviceFactory.Invoke();
-
+            // obsolete function
             return this;
         }
 
-        public ISKFunction SetDefaultSkillCollection(IReadOnlySkillCollection skills)
+        public ISKFunction SetDefaultSkillCollection(IReadOnlyFunctionCollection functions)
         {
-            this._skillCollection = skills;
-
+            // obsolete function
             return this;
         }
+
+        public ISKFunction SetDefaultFunctionCollection(IReadOnlyFunctionCollection functions)
+        {
+            // obsolete function
+            return this;
+        }
+        #endregion
 
         static private List<ParameterView> DefaultParameterList()
         {
-            return new List<ParameterView>() { new ParameterView(name: "input", description: "Input string", defaultValue: "") };
+            return new List<ParameterView>() { new ParameterView(Name: "input", Description: "Input string", DefaultValue: "") };
         }
 
         // Function from Power Fx REPL
