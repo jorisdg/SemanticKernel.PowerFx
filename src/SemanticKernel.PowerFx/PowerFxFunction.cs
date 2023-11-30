@@ -34,6 +34,8 @@ namespace SemanticKernel.PowerFx
         public bool IsSemantic => false;
 
         public string SkillName => PluginName;
+
+        public IEnumerable<AIRequestSettings> ModelSettings { get; set; }
         #endregion
 
         public PowerFxFunction(RecalcEngine engine, string expression, bool hasSideEffects, string name, string skillName, string description, List<ParameterView> parameters)
